@@ -1,7 +1,30 @@
-import React from "react";
+import Guest from "@/components/Guest";
+import HomeContent from "@/components/HomeContent";
+import { getOrCreateUser } from "@/lib/getOrCreateUser";
 
-const HomePage = () => {
-  return <div className="bg-blue-600">HomePage</div>;
-};
+interface User {
+  name: string;
+  imageUrl?: string;
+  createdAt: Date;
+  lastActiveAt?: Date;
+}
 
-export default HomePage;
+export default async function HomePage() {
+  try {
+    const user = (await getOrCreateUser()) as User | null;
+    if (!user) return <Guest />;
+    return (
+      <HomeContent
+        user={{
+          firstName: user.name,
+          imageUrl: user.imageUrl || "/default-avatar.png",
+          createdAt: user.createdAt.toISOString(),
+          lastActiveAt: user.lastActiveAt?.toISOString(),
+        }}
+      />
+    );
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    return <Guest />;
+  }
+}
