@@ -1,11 +1,12 @@
 "use client";
-import { useRef, useState } from "react";
+import { useRef, useState, useCallback } from "react";
+import { debounce } from "lodash";
 import addExpenseRecord from "@/actions/addExpenseRecord";
 import { suggestCategory } from "@/actions/suggestCategory";
 
 const AddRecord = () => {
   const formRef = useRef<HTMLFormElement>(null);
-  const [amount, setAmount] = useState(50); // Default value for expense amount
+  const [amount, setAmount] = useState(0); // Default value for expense amount
   const [alertMessage, setAlertMessage] = useState<string | null>(null); // State for alert message
   const [alertType, setAlertType] = useState<"success" | "error" | null>(null); // State for alert type
   const [isLoading, setIsLoading] = useState(false); // State for loading spinner
@@ -29,7 +30,7 @@ const AddRecord = () => {
       setAlertMessage("Expense record added successfully!");
       setAlertType("success"); // Set alert type to success
       formRef.current?.reset();
-      setAmount(50); // Reset the amount to the default value
+      setAmount(0); // Reset the amount to the default value
       setCategory(""); // Reset the category
       setDescription(""); // Reset the description
     }
@@ -37,32 +38,55 @@ const AddRecord = () => {
     setIsLoading(false); // Hide spinner
   };
 
-  const handleAISuggestCategory = async () => {
-    if (!description.trim()) {
-      setAlertMessage("Please enter a description first");
-      setAlertType("error");
-      return;
-    }
-
-    setIsCategorizingAI(true);
-    setAlertMessage(null);
-
-    try {
-      const result = await suggestCategory(description);
-      if (result.error) {
-        setAlertMessage(`AI Suggestion: ${result.error}`);
+  // Memoizar la función con debounce
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const debouncedSuggestCategory = useCallback(
+    debounce(async (description: string) => {
+      if (!description.trim()) {
+        setAlertMessage("Please enter a description first");
         setAlertType("error");
-      } else {
-        setCategory(result.category);
-        setAlertMessage(`AI suggested category: ${result.category}`);
-        setAlertType("success");
+        setIsCategorizingAI(false);
+        return;
       }
-    } catch {
-      setAlertMessage("Failed to get AI category suggestion");
-      setAlertType("error");
-    } finally {
-      setIsCategorizingAI(false);
-    }
+
+      setIsCategorizingAI(true);
+      setAlertMessage(null);
+
+      try {
+        const result = await suggestCategory(description);
+        if (result.error) {
+          if (
+            result.error.includes("429") ||
+            result.error.includes("Rate limit")
+          ) {
+            setAlertMessage(
+              "Rate limit exceeded. Try again later or add credits to your OpenRouter account."
+            );
+          } else {
+            setAlertMessage(`AI Suggestion Error: ${result.error}`);
+          }
+          setAlertType("error");
+        } else {
+          setCategory(result.category);
+          setAlertMessage(`AI suggested category: ${result.category}`);
+          setAlertType("success");
+        }
+      } catch (error: any) {
+        setAlertMessage(
+          error.message.includes("429") || error.message.includes("Rate limit")
+            ? "Rate limit exceeded. Try again later or add credits to your OpenRouter account."
+            : "Failed to get AI category suggestion"
+        );
+        setAlertType("error");
+      } finally {
+        setIsCategorizingAI(false);
+      }
+    }, 500),
+    []
+  );
+
+  const handleAISuggestCategory = () => {
+    debouncedSuggestCategory(description);
   };
 
   return (
@@ -115,7 +139,7 @@ const AddRecord = () => {
                 type="button"
                 onClick={handleAISuggestCategory}
                 disabled={isCategorizingAI || !description.trim()}
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 sm:w-8 sm:h-7 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 disabled:from-gray-300 disabled:to-gray-300 text-white rounded-lg text-xs font-medium flex items-center justify-center shadow-lg hover:shadow-xl disabled:shadow-none transition-all duration-200"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 sm:w-8 sm:h-7 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 disabled:from-gray-300 disabled:to-gray-300 disabled:cursor-not-allowed text-white rounded-lg text-xs font-medium flex items-center justify-center shadow-lg hover:shadow-xl disabled:shadow-none transition-all duration-200"
                 title="AI Category Suggestion"
               >
                 {isCategorizingAI ? (
@@ -233,7 +257,7 @@ const AddRecord = () => {
               <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
               Amount
               <span className="text-xs text-gray-400 dark:text-gray-500 ml-2 font-normal hidden sm:inline">
-                Enter amount between $0 and $1,000
+                Enter amount between 0€ and 1,000€
               </span>
             </label>
             <div className="relative">
@@ -260,7 +284,7 @@ const AddRecord = () => {
         {/* Submit Button */}
         <button
           type="submit"
-          className="w-full relative overflow-hidden bg-gradient-to-r from-emerald-600 via-green-500 to-teal-500 hover:from-emerald-700 hover:via-green-600 hover:to-teal-600 text-white px-4 py-3 sm:px-5 sm:py-4 rounded-xl font-semibold shadow-xl hover:shadow-2xl group transition-all duration-300 border-2 border-transparent hover:border-white/20 text-sm sm:text-base cursor-pointer"
+          className="w-full relative overflow-hidden bg-gradient-to-r from-emerald-600 via-green-500 to-teal-500 hover:from-emerald-700 hover:via-green-600 hover:to-teal-600 text-white px-4 py-3 sm:px-5 sm:py-4 rounded-xl font-semibold shadow-xl hover:shadow-2xl group transition-all duration-300 border-2 border-transparent hover:border-white/20 text-sm sm:text-base cursor-pointer disabled:cursor-not-allowed"
           disabled={isLoading}
         >
           <div className="relative flex items-center justify-center gap-2">
